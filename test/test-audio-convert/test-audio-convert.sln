@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+VisualStudioVersion = 15.0.28307.421
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "test-audio-convert", "test-audio-convert.vcxproj", "{91AC3973-F2F2-44E4-958C-FA85AAD7587C}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{91AC3973-F2F2-44E4-958C-FA85AAD7587C}.Debug|x64.ActiveCfg = Debug|x64
+		{91AC3973-F2F2-44E4-958C-FA85AAD7587C}.Debug|x64.Build.0 = Debug|x64
+		{91AC3973-F2F2-44E4-958C-FA85AAD7587C}.Debug|x86.ActiveCfg = Debug|Win32
+		{91AC3973-F2F2-44E4-958C-FA85AAD7587C}.Debug|x86.Build.0 = Debug|Win32
+		{91AC3973-F2F2-44E4-958C-FA85AAD7587C}.Release|x64.ActiveCfg = Release|x64
+		{91AC3973-F2F2-44E4-958C-FA85AAD7587C}.Release|x64.Build.0 = Release|x64
+		{91AC3973-F2F2-44E4-958C-FA85AAD7587C}.Release|x86.ActiveCfg = Release|Win32
+		{91AC3973-F2F2-44E4-958C-FA85AAD7587C}.Release|x86.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {0F910A4B-2C61-4463-9C46-AB8AA008596C}
+	EndGlobalSection
+EndGlobal
