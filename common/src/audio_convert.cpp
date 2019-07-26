@@ -5,6 +5,27 @@
 
 namespace netinfo {
 
+	// g.711 u-law, A-law define
+	#define SIGN_BIT        (0x80)      // Sign bit for a A-law byte. 
+	#define QUANT_MASK		(0xf)       // Quantization field mask.
+	#define NSEGS           (8)         // Number of A-law segments.
+	#define SEG_SHIFT       (4)         // Left shift for segment number.
+	#define SEG_MASK        (0x70)      // Segment field mask.
+	#define BIAS            (0x84)      // Bias for linear code.
+	#define CLIP            (8159)
+
+	unsigned short seg_alaw_end[8] = { 0x1F, 0x3F, 0x7F, 0xFF, 0x1FF, 0x3FF, 0x7FF, 0xFFF };
+	unsigned short seg_ulaw_end[8] = { 0x3F, 0x7F, 0xFF, 0x1FF,0x3FF, 0x7FF, 0xFFF, 0x1FFF };
+
+	unsigned int alaw_ulaw_search(short val, unsigned short *table, unsigned int size) {
+		for (unsigned int i = 0; i < size; i++) {
+			if (val <= *table++)
+				return i;
+		}
+		return size;
+	}
+
+
 	wav_header::wav_header(void) {
 		init();
 	}
@@ -658,7 +679,19 @@ namespace netinfo {
 		*dst_size = samples;
 		*dst_data = new char[*dst_size];
 		for (unsigned int i = 0; i < samples; ++i) {
-			(*dst_data)[i] = ((int)src_data[2 * i] + (int)src_data[2 * i + 1]) >> 1;
+			if (format == WAV_FORMAT_G711A) {
+				(*dst_data)[i] = pcm16_to_alaw(
+					((int)alaw_to_pcm16(src_data[2 * i]) + 
+					(int)alaw_to_pcm16(src_data[2 * i + 1])) >> 1);
+			}
+			else if (format == WAV_FORMAT_G711U) {
+				(*dst_data)[i] = pcm16_to_ulaw(
+					((int)ulaw_to_pcm16(src_data[2 * i]) +
+					(int)ulaw_to_pcm16(src_data[2 * i + 1])) >> 1);
+			}
+			else {
+				(*dst_data)[i] = ((int)src_data[2 * i] + (int)src_data[2 * i + 1]) >> 1;
+			}
 		}
 		return ERROR_SUCCESS;
 	}
@@ -687,7 +720,9 @@ namespace netinfo {
 			return ret;
 		}
 
-		if (src_wh.audio_format != WAV_FORMAT_PCM) {
+		if (src_wh.audio_format != WAV_FORMAT_PCM
+			&& src_wh.audio_format != WAV_FORMAT_G711A
+			&& src_wh.audio_format != WAV_FORMAT_G711U) {
 			return ERROR_NOT_SUPPORTED;
 		}
 		if (src_wh.channels != 2) {
@@ -708,6 +743,7 @@ namespace netinfo {
 		wav_header dst_wh;
 		if (src_wh.bits_per_sample == 8) {
 			dst_wh.init_pcm8();
+			dst_wh.audio_format = src_wh.audio_format;
 		}
 		else {
 			dst_wh.init_pcm16();
@@ -738,7 +774,7 @@ namespace netinfo {
 				if (size == 0) {
 					break;
 				}
-				if (pcm_stereo_to_mono(src_data, size, &dst_data, &dst_size) != ERROR_SUCCESS) {
+				if (pcm_stereo_to_mono(src_data, size, &dst_data, &dst_size, dst_wh.audio_format) != ERROR_SUCCESS) {
 					break;
 				}
 				if (fwrite(dst_data, 1, dst_size, dst_file) != dst_size) {
@@ -1228,7 +1264,8 @@ namespace netinfo {
 
 	int audio_convert::pcm8_to_pcm16(
 		const char* const src_data, const unsigned int src_size
-		, short** const dst_data, unsigned int* const dst_size) {
+		, short** const dst_data, unsigned int* const dst_size
+		, const unsigned short format) {
 		unsigned int samples = src_size;
 		if (src_data == nullptr || samples == 0 || dst_data == nullptr || dst_size == nullptr) {
 			return ERROR_INVALID_DATA;
@@ -1237,7 +1274,15 @@ namespace netinfo {
 		*dst_size = samples;
 		*dst_data = new short[*dst_size];
 		for (unsigned int i = 0; i < samples; ++i) {
-			(*dst_data)[i] = (short)(src_data[i] - 128) << 8;
+			if (format == WAV_FORMAT_G711A) {
+				(*dst_data)[i] = alaw_to_pcm16(src_data[i]);
+			} 
+			else if (format == WAV_FORMAT_G711U) {
+				(*dst_data)[i] = ulaw_to_pcm16(src_data[i]);
+			}
+			else {
+				(*dst_data)[i] = (short)(src_data[i] - 128) << 8;
+			}	
 		}
 		return ERROR_SUCCESS;
 	}
@@ -1250,8 +1295,9 @@ namespace netinfo {
 			return ret;
 		}
 
-		if (src_wh.audio_format != WAV_FORMAT_PCM
-			|| src_wh.bits_per_sample != 8) {
+		if (src_wh.audio_format != WAV_FORMAT_G711A
+			&& src_wh.audio_format != WAV_FORMAT_G711U
+			&& (src_wh.audio_format != WAV_FORMAT_PCM || src_wh.bits_per_sample != 8)) {
 			return ERROR_NOT_SUPPORTED;
 		}
 
@@ -1299,7 +1345,7 @@ namespace netinfo {
 				break;
 			}
 
-			if (pcm8_to_pcm16(src_data, size, &dst_data, &dst_size) != ERROR_SUCCESS) {
+			if (pcm8_to_pcm16(src_data, size, &dst_data, &dst_size, src_wh.audio_format) != ERROR_SUCCESS) {
 				break;
 			}
 			if (fwrite(dst_data, 2, dst_size, dst_file) != dst_size) {
@@ -1319,7 +1365,8 @@ namespace netinfo {
 
 	int audio_convert::pcm16_to_pcm8(
 		const short* const src_data, const unsigned int src_size
-		, char** const dst_data, unsigned int* const dst_size) {
+		, char** const dst_data, unsigned int* const dst_size
+		, const unsigned short format) {
 		unsigned int samples = src_size;
 		if (src_data == nullptr || samples == 0 || dst_data == nullptr || dst_size == nullptr) {
 			return ERROR_INVALID_DATA;
@@ -1328,13 +1375,22 @@ namespace netinfo {
 		*dst_size = samples;
 		*dst_data = new char[*dst_size];
 		for (unsigned int i = 0; i < samples; ++i) {
-			(*dst_data)[i] = (src_data[i] >> 8) + 128;
+			if (format == WAV_FORMAT_G711A) {
+				(*dst_data)[i] = pcm16_to_alaw(src_data[i]);
+			}
+			else if (format == WAV_FORMAT_G711U) {
+				(*dst_data)[i] = pcm16_to_ulaw(src_data[i]);
+			}
+			else {
+				(*dst_data)[i] = (src_data[i] >> 8) + 128;
+			}
 		}
 		return ERROR_SUCCESS;
 	}
 
 	int audio_convert::wav_pcm16_to_pcm8(
-		const char* const src_filename, const char* const dst_filename) {
+		const char* const src_filename, const char* const dst_filename
+		, const unsigned short format) {
 		wav_header src_wh;
 		int ret = read_wav_header(src_filename, &src_wh);
 		if (ret != ERROR_SUCCESS) {
@@ -1359,6 +1415,7 @@ namespace netinfo {
 
 		wav_header dst_wh;
 		dst_wh.init_pcm8();
+		dst_wh.audio_format = format;
 		if (src_wh.channels == 2) {
 			dst_wh.channels = 2;
 			dst_wh.bytes_per_second = 16000;
@@ -1390,7 +1447,7 @@ namespace netinfo {
 				break;
 			}
 
-			if (pcm16_to_pcm8(src_data, size, &dst_data, &dst_size) != ERROR_SUCCESS) {
+			if (pcm16_to_pcm8(src_data, size, &dst_data, &dst_size, format) != ERROR_SUCCESS) {
 				break;
 			}
 			if (fwrite(dst_data, 1, dst_size, dst_file) != dst_size) {
@@ -1407,5 +1464,134 @@ namespace netinfo {
 		dst_wh.riff_length = data_length + dst_wh.length() - 8;
 		return write_wav_header(dst_filename, &dst_wh, false);
 	}
+
+	/*
+	 * Convert an A-law value to 16-bit linear PCM  
+	 */
+	short audio_convert::alaw_to_pcm16(unsigned char val) {
+		val ^= 0x55;
+		
+		short t = (val & QUANT_MASK) << 4;
+		short seg = ((unsigned)val & SEG_MASK) >> SEG_SHIFT;
+		switch (seg) {
+		case 0:
+			t += 8;
+			break;
+		case 1:
+			t += 0x108;
+			break;
+		default:
+			t += 0x108;
+			t <<= seg - 1;
+		}
+		return ((val & SIGN_BIT) ? t : -t);
+	}
+
+	/*
+	 * Convert a u-law value to 16-bit linear PCM
+	 *
+	 * First, a biased linear code is derived from the code word. An unbiased
+	 * output can then be obtained by subtracting 33 from the biased code.
+	 *
+	 * Note that this function expects to be passed the complement of the
+	 * original code word. This is in keeping with ISDN conventions.
+	 */
+	short audio_convert::ulaw_to_pcm16(unsigned char val) {
+		// Complement to obtain normal u-law value.
+		val = ~val;
+
+		// Extract and bias the quantization bits. Then
+		// shift up by the segment number and subtract out the bias.
+		short t = ((val & QUANT_MASK) << 3) + BIAS;
+		t <<= ((unsigned)val & SEG_MASK) >> SEG_SHIFT;
+		return ((val & SIGN_BIT) ? (BIAS - t) : (t - BIAS));
+	}
+
+	/*
+	 * Convert a 16-bit linear PCM value to 8-bit A-law
+	 *
+	 *              Linear Input Code       Compressed Code
+	 *      ------------------------        ---------------
+	 *      0000000wxyza                    000wxyz
+	 *      0000001wxyza                    001wxyz
+	 *      000001wxyzab                    010wxyz
+	 *      00001wxyzabc                    011wxyz
+	 *      0001wxyzabcd                    100wxyz
+	 *      001wxyzabcde                    101wxyz
+	 *      01wxyzabcdef                    110wxyz
+	 *      1wxyzabcdefg                    111wxyz
+	 */
+	unsigned char audio_convert::pcm16_to_alaw(short val) {
+
+		int mask;
+		int seg;
+		int aval;
+
+		int pcm_val = val;
+		pcm_val = pcm_val >> 3;
+
+		if (pcm_val >= 0) {
+			// sign (7th) bit = 1
+			mask = 0xD5;
+		}
+		else {
+			// sign bit = 0
+			mask = 0x55;
+			pcm_val = -pcm_val - 1;
+		}
+
+		// Convert the scaled magnitude to segment number.
+		seg = alaw_ulaw_search(pcm_val, seg_alaw_end, 8);
+
+		// Combine the sign, segment, and quantization bits.
+		// out of range, return maximum value.
+		if (seg >= 8) {
+			return (0x7F ^ mask);
+		}
+		else {
+			aval = seg << SEG_SHIFT;
+			if (seg < 2) {
+				aval |= (pcm_val >> 1) & QUANT_MASK;
+			}
+			else {
+				aval |= (pcm_val >> seg) & QUANT_MASK;
+			}
+			return (aval ^ mask);
+		}
+	}		
 	
+	unsigned char audio_convert::pcm16_to_ulaw(short val) {
+		int mask;
+		int seg;
+		int uval;
+
+		// Get the sign and the magnitude of the value.
+		int pcm_val = val;
+		pcm_val = pcm_val >> 2;
+		if (pcm_val < 0) {
+			pcm_val = -pcm_val;
+			mask = 0x7F;
+		}
+		else {
+			mask = 0xFF;
+		}
+		// clip the magnitude
+		if (pcm_val > CLIP) pcm_val = CLIP;
+		pcm_val += (BIAS >> 2);
+
+		// Convert the scaled magnitude to segment number.
+		seg = alaw_ulaw_search(pcm_val, seg_ulaw_end, 8);
+
+		// Combine the sign, segment, quantization bits;
+		// and complement the code word.
+		// out of range, return maximum value.
+		if (seg >= 8) {
+			return (0x7F ^ mask);
+		}
+		else {
+			uval = (seg << 4) | ((pcm_val >> (seg + 1)) & 0xF);
+			return (uval ^ mask);
+		}
+	}
+
 }

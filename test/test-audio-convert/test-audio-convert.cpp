@@ -38,8 +38,8 @@ int main()
 
  	// 双声道转单声道
 // 	ret = ac.wav_stereo_to_mono(
-// 		(run_path + "\\wav\\pcm16_stereo.wav").c_str(),
-// 		(run_path + "\\wav\\pcm16_stereo_1.wav").c_str());
+// 		(run_path + "\\wav\\ulaw_stereo.wav").c_str(),
+// 		(run_path + "\\wav\\ulaw_stereo_1.wav").c_str());
 
  	// 双声道分离
 // 	ret = ac.wav_stereo_to_split(
@@ -53,14 +53,15 @@ int main()
 // 		(run_path + "\\wav\\pcm16_v3.wav").c_str(),
 // 		(run_path + "\\wav\\pcm16_stereo_m.wav").c_str());
 
-	// PCM8转PCM16
+	// PCM8（alaw和ulaw）转PCM16
 // 	ret = ac.wav_pcm8_to_pcm16(
-// 		(run_path + "\\wav\\pcm8_mono.wav").c_str(),
-// 		(run_path + "\\wav\\pcm8_mono_16.wav").c_str());
-
-	ret = ac.wav_pcm16_to_pcm8(
-		(run_path + "\\wav\\pcm16_stereo.wav").c_str(),
-		(run_path + "\\wav\\pcm16_stereo_8.wav").c_str());
+// 		(run_path + "\\wav\\ulaw_stereo.wav").c_str(),
+// 		(run_path + "\\wav\\ulaw_stereo_16.wav").c_str());
+	
+	// PCM16转PCM8（alaw和ulaw）
+// 	ret = ac.wav_pcm16_to_pcm8(
+// 		(run_path + "\\wav\\pcm16_stereo.wav").c_str(),
+// 		(run_path + "\\wav\\pcm16_stereo_u.wav").c_str(), WAV_FORMAT_G711U);
 
 
 	return 0;
